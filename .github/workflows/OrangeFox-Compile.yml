@@ -92,13 +92,16 @@ jobs:
         cd ${{ inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
-    - name: Clone QCOM Common for cryptfs_hw
+    - name: Setup cryptfs_hw Only
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
-        rm -rf device/qcom/common vendor/qcom/opensource/commonsys/cryptfs_hw
-        git clone https://github.com/minimal-manifest-twrp/platform_device_qcom_common.git device/qcom/common
+        # Bersihkan folder qcom common agar tidak ada tools usang seperti dtbtool yang terbaca
+        rm -rf device/qcom/common vendor/qcom/opensource/commonsys/cryptfs_hw temp_qcom
+        git clone https://github.com/minimal-manifest-twrp/platform_device_qcom_common.git temp_qcom
         mkdir -p vendor/qcom/opensource/commonsys
-        cp -r device/qcom/common/cryptfs_hw vendor/qcom/opensource/commonsys/cryptfs_hw
+        # Ambil HANYA folder cryptfs_hw saja
+        cp -r temp_qcom/cryptfs_hw vendor/qcom/opensource/commonsys/cryptfs_hw
+        rm -rf temp_qcom
 
     - name: Adapt Device Tree for OrangeFox 12.1
       run: |

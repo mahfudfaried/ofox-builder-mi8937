@@ -111,7 +111,7 @@ jobs:
         COMMON_DIR="$FOX_DIR/device/xiaomi/mithorium-common"
         cd "$DEV_DIR"
 
-        echo "Menyesuaikan makefile untuk OrangeFox, RDP, dan perbaikan dekripsi modern FBE..."
+        echo "Menyesuaikan makefile untuk OrangeFox, RDP, kompatibilitas santoni, dan FBE modern..."
 
         # 1. Konversi omni_<device>.mk ke twrp_<device>.mk jika ada legacy tree
         if [ -f "omni_${{ inputs.DEVICE_NAME }}.mk" ]; then
@@ -151,13 +151,21 @@ jobs:
           echo "TW_HAS_CAPACITIVE_KEYS := true" >> BoardConfig.mk
         fi
 
-        # 7. Salin foto profil maintainer ke device tree
+        # 7. Dukungan Assert Device untuk Santoni dan mi8937 (Cegah error ketidakcocokan perangkat di OrangeFox)
+        if ! grep -q "TARGET_OTA_ASSERT_DEVICE" BoardConfig.mk; then
+          echo "" >> BoardConfig.mk
+          echo "# Device assert compatibility for santoni & mi8937" >> BoardConfig.mk
+          echo "TARGET_OTA_ASSERT_DEVICE := santoni,mi8937" >> BoardConfig.mk
+          echo "FOX_TARGET_DEVICES := santoni,mi8937" >> BoardConfig.mk
+        fi
+
+        # 8. Salin foto profil maintainer ke device tree
         if [ -f "${GITHUB_WORKSPACE}/assets/maintainer.png" ]; then
           cp "${GITHUB_WORKSPACE}/assets/maintainer.png" "$DEV_DIR/maintainer.png"
           echo "Avatar maintainer berhasil disalin ke device tree."
         fi
 
-        # 8. Konfigurasi FBE v2 policy & Metadata Decryption untuk Android 11-17 (LineageOS modern)
+        # 9. Konfigurasi FBE v2 policy & Metadata Decryption untuk Android 11-17 (LineageOS modern)
         if [ -d "$COMMON_DIR" ]; then
           sed -i 's|TW_USE_FSCRYPT_POLICY := 1|TW_USE_FSCRYPT_POLICY := 2|g' "$COMMON_DIR/BoardConfigCommon.mk" || true
         fi
@@ -168,7 +176,7 @@ jobs:
           echo "TW_USE_FSCRYPT_POLICY := 2" >> BoardConfig.mk
         fi
 
-        # 9. Pindahkan eksekusi merge-fstab.sh dari 'on init' ke 'on fs' (setelah /dev/block/bootdevice dibuat)
+        # 10. Pindahkan eksekusi merge-fstab.sh dari 'on init' ke 'on fs' (setelah /dev/block/bootdevice dibuat)
         if [ -f "recovery/root/init.recovery.device.rc" ]; then
           sed -i '/exec u:r:recovery:s0 -- \/system\/bin\/merge-fstab.sh/d' recovery/root/init.recovery.device.rc
         fi
@@ -182,7 +190,7 @@ jobs:
           fi
         fi
 
-        # 10. Patch merge-fstab.sh untuk mendukung dekripsi modern FBE (Retrofit Dynamic Partitions)
+        # 11. Patch merge-fstab.sh untuk mendukung dekripsi modern FBE (Retrofit Dynamic Partitions)
         if [ -f "recovery/root/system/bin/merge-fstab.sh" ]; then
           echo "Menerapkan fallback FBE otomatis pada recovery/root/system/bin/merge-fstab.sh..."
           sed -i '/umount \/data || true/!b;n;c\else\n    sed -i '\''s|,encryptable=footer|,fileencryption=aes-256-xts|g'\'' /system/etc/recovery.fstab\n    sed -i '\''s|encryptable=footer;|fileencryption=aes-256-xts;|g'\'' /system/etc/twrp.flags\nfi' recovery/root/system/bin/merge-fstab.sh
@@ -210,6 +218,10 @@ jobs:
         if [ -f "${GITHUB_WORKSPACE}/assets/maintainer.png" ]; then
           export OF_MAINTAINER_AVATAR="${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/${{ inputs.DEVICE_PATH }}/maintainer.png"
         fi
+
+        # Dukungan multi-device assert (santoni & mi8937) di updater-script zip
+        export TARGET_OTA_ASSERT_DEVICE="santoni,mi8937"
+        export FOX_TARGET_DEVICES="santoni,mi8937"
 
         # Dukungan tombol fisik dan opsi menyembunyikan on-screen navbar
         export OF_ALLOW_DISABLE_NAVBAR=1
@@ -253,7 +265,8 @@ jobs:
 
           * **Maintainer:** `mahfudfaried`
           * **Manifest Branch:** `fox_${{ inputs.MANIFEST_BRANCH }}`
-          * **Target Perangkat:** `${{ inputs.DEVICE_NAME }}` (Xiaomi Redmi 4X / mi8937)
+          * **Target Perangkat:** `${{ inputs.DEVICE_NAME }}` (Xiaomi Redmi 4X / `santoni` / `mi8937`)
+          * **Supported Devices:** `santoni`, `mi8937`
           * **Partition Scheme:** Retrofit Dynamic Partitions (RDP)
           * **Encryption:** File-Based Encryption (FBE v2) & FDE Compatible
           * **Device Tree:** [${{ inputs.DEVICE_TREE }}](${{ inputs.DEVICE_TREE }}) (Branch: `${{ inputs.DEVICE_TREE_BRANCH }}`)

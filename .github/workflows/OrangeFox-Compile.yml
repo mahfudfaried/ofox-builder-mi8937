@@ -110,21 +110,24 @@ jobs:
         # 2. Hapus referensi file yang sudah usang di Android 12 (seperti languages_full.mk jika ada)
         find . -name "*.mk" -exec sed -i 's|.*languages_full.mk.*||g' {} +
 
-        # 3. Tangani arsitektur 64-bit CPU dengan 32-bit userspace apps
+        # 3. Hapus duplikasi penyalinan kernel di PRODUCT_COPY_FILES karena sudah diatur oleh TARGET_PREBUILT_KERNEL
+        find . -name "*.mk" -exec sed -i 's|.*recovery/kernel:kernel.*||g' {} +
+
+        # 4. Tangani arsitektur 64-bit CPU dengan 32-bit userspace apps
         if ! grep -q "TARGET_SUPPORTS_64_BIT_APPS" BoardConfig.mk; then
           echo "" >> BoardConfig.mk
           echo "# Fix AOSP 12 32-bit app check on 64-bit device" >> BoardConfig.mk
           echo "TARGET_SUPPORTS_64_BIT_APPS := false" >> BoardConfig.mk
         fi
 
-        # 4. Perbarui AndroidProducts.mk dan COMMON_LUNCH_CHOICES standar Android 12.1
+        # 5. Perbarui AndroidProducts.mk dan COMMON_LUNCH_CHOICES standar Android 12.1
         echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk" > AndroidProducts.mk
         echo "" >> AndroidProducts.mk
         echo "COMMON_LUNCH_CHOICES := \\" >> AndroidProducts.mk
         echo "    twrp_${{ inputs.DEVICE_NAME }}-eng \\" >> AndroidProducts.mk
         echo "    twrp_${{ inputs.DEVICE_NAME }}-userdebug" >> AndroidProducts.mk
 
-        # 5. Kosongkan vendorsetup.sh agar tidak terjadi pesan usang add_lunch_combo
+        # 6. Kosongkan vendorsetup.sh agar tidak terjadi pesan usang add_lunch_combo
         if [ -f "vendorsetup.sh" ]; then
           > vendorsetup.sh
         fi

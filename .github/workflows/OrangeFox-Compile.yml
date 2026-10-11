@@ -14,13 +14,13 @@ on:
       DEVICE_TREE:
         description: 'OrangeFox / TWRP Device Tree'
         required: true
-        default: 'https://gitlab.com/OrangeFox/device/santoni.git'
+        default: 'https://github.com/Dhruvgera/santoni-ofrp.git'
       DEVICE_TREE_BRANCH:
         description: 'Device Tree Branch'
         required: true
-        default: 'fox_9.0'
+        default: 'android-9.0'
       DEVICE_PATH:
-        description: 'Device Path (misal: device/xiaomi/santoni)'
+        description: 'Device Path'
         required: true
         default: 'device/xiaomi/santoni'
       DEVICE_NAME:
@@ -87,6 +87,7 @@ jobs:
     - name: Clone Device Tree
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+        rm -rf ./${{ inputs.DEVICE_PATH }}
         git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./${{ inputs.DEVICE_PATH }}
         cd ${{ inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
@@ -117,15 +118,15 @@ jobs:
 
         set -e
         # Mencoba lunch target recovery
-        if lunch twrp_${{ inputs.DEVICE_NAME }}-eng 2>/dev/null; then
-          echo "Lunch twrp_${{ inputs.DEVICE_NAME }}-eng berhasil"
-        elif lunch omni_${{ inputs.DEVICE_NAME }}-eng 2>/dev/null; then
+        if lunch omni_${{ inputs.DEVICE_NAME }}-eng 2>/dev/null; then
           echo "Lunch omni_${{ inputs.DEVICE_NAME }}-eng berhasil"
+        elif lunch twrp_${{ inputs.DEVICE_NAME }}-eng 2>/dev/null; then
+          echo "Lunch twrp_${{ inputs.DEVICE_NAME }}-eng berhasil"
         elif lunch fox_${{ inputs.DEVICE_NAME }}-eng 2>/dev/null; then
           echo "Lunch fox_${{ inputs.DEVICE_NAME }}-eng berhasil"
         else
-          echo "Mencoba fallback: lunch twrp_${{ inputs.DEVICE_NAME }}-eng"
-          lunch twrp_${{ inputs.DEVICE_NAME }}-eng
+          echo "Fallback: lunch omni_${{ inputs.DEVICE_NAME }}-eng"
+          lunch omni_${{ inputs.DEVICE_NAME }}-eng
         fi
 
         make clean

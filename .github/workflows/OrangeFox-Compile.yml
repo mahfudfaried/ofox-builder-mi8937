@@ -110,22 +110,23 @@ jobs:
         # 2. Hapus referensi file yang sudah usang di Android 12 (seperti languages_full.mk jika ada)
         find . -name "*.mk" -exec sed -i 's|.*languages_full.mk.*||g' {} +
 
-        # 3. Perbarui AndroidProducts.mk agar mereferensikan twrp_<device>.mk
-        if [ -f "AndroidProducts.mk" ]; then
-          sed -i "s|omni_${{ inputs.DEVICE_NAME }}\.mk|twrp_${{ inputs.DEVICE_NAME }}\.mk|g" AndroidProducts.mk
-          if ! grep -q "twrp_${{ inputs.DEVICE_NAME }}.mk" AndroidProducts.mk; then
-            echo "PRODUCT_MAKEFILES += \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk" >> AndroidProducts.mk
-          fi
-        else
-          echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk" > AndroidProducts.mk
+        # 3. Tangani arsitektur 64-bit CPU dengan 32-bit userspace apps
+        if ! grep -q "TARGET_SUPPORTS_64_BIT_APPS" BoardConfig.mk; then
+          echo "" >> BoardConfig.mk
+          echo "# Fix AOSP 12 32-bit app check on 64-bit device" >> BoardConfig.mk
+          echo "TARGET_SUPPORTS_64_BIT_APPS := false" >> BoardConfig.mk
         fi
 
-        # 4. Tambahkan lunch combo ke vendorsetup.sh
+        # 4. Perbarui AndroidProducts.mk dan COMMON_LUNCH_CHOICES standar Android 12.1
+        echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk" > AndroidProducts.mk
+        echo "" >> AndroidProducts.mk
+        echo "COMMON_LUNCH_CHOICES := \\" >> AndroidProducts.mk
+        echo "    twrp_${{ inputs.DEVICE_NAME }}-eng \\" >> AndroidProducts.mk
+        echo "    twrp_${{ inputs.DEVICE_NAME }}-userdebug" >> AndroidProducts.mk
+
+        # 5. Kosongkan vendorsetup.sh agar tidak terjadi pesan usang add_lunch_combo
         if [ -f "vendorsetup.sh" ]; then
-          echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-eng" >> vendorsetup.sh
-          echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-userdebug" >> vendorsetup.sh
-        else
-          echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-eng" > vendorsetup.sh
+          > vendorsetup.sh
         fi
 
         echo "Pembaruan tree selesai."

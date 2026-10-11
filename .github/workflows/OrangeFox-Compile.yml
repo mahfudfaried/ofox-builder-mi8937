@@ -102,6 +102,10 @@ jobs:
         cp temp_qcom/cryptfs_hw/cryptfs_hw.h vendor/qcom/opensource/commonsys/cryptfs_hw/
         rm -rf temp_qcom
 
+        # Sesuaikan include path di cryptfs_hw.c untuk Android 12
+        sed -i 's|"keymaster_common.h"|<hardware/keymaster_common.h>|g' vendor/qcom/opensource/commonsys/cryptfs_hw/cryptfs_hw.c
+        sed -i 's|"hardware.h"|<hardware/hardware.h>|g' vendor/qcom/opensource/commonsys/cryptfs_hw/cryptfs_hw.c
+
         # Buat Android.bp modern agar dikenali oleh Soong (system/vold)
         cat << 'EOF' > vendor/qcom/opensource/commonsys/cryptfs_hw/Android.bp
         cc_library_headers {
@@ -115,6 +119,10 @@ jobs:
         cc_library {
             name: "libcryptfs_hw",
             srcs: ["cryptfs_hw.c"],
+            include_dirs: [
+                "hardware/libhardware/include",
+                "hardware/libhardware/include/hardware",
+            ],
             header_libs: [
                 "libcryptfs_hw_headers",
                 "libhardware_headers",

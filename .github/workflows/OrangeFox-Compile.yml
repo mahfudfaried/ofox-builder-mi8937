@@ -92,6 +92,14 @@ jobs:
         cd ${{ inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
+    - name: Clone QCOM Common for cryptfs_hw
+      run: |
+        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+        rm -rf device/qcom/common vendor/qcom/opensource/commonsys/cryptfs_hw
+        git clone https://github.com/minimal-manifest-twrp/platform_device_qcom_common.git device/qcom/common
+        mkdir -p vendor/qcom/opensource/commonsys
+        cp -r device/qcom/common/cryptfs_hw vendor/qcom/opensource/commonsys/cryptfs_hw
+
     - name: Adapt Device Tree for OrangeFox 12.1
       run: |
         DEV_DIR="${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/${{ inputs.DEVICE_PATH }}"
@@ -120,14 +128,17 @@ jobs:
           echo "TARGET_SUPPORTS_64_BIT_APPS := false" >> BoardConfig.mk
         fi
 
-        # 5. Perbarui AndroidProducts.mk dan COMMON_LUNCH_CHOICES standar Android 12.1
+        # 5. Pastikan TARGET_CRYPTFS_HW_PATH mengarah ke folder cryptfs_hw yang valid
+        sed -i 's|TARGET_CRYPTFS_HW_PATH :=.*|TARGET_CRYPTFS_HW_PATH := vendor/qcom/opensource/commonsys/cryptfs_hw|g' BoardConfig.mk
+
+        # 6. Perbarui AndroidProducts.mk dan COMMON_LUNCH_CHOICES standar Android 12.1
         echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk" > AndroidProducts.mk
         echo "" >> AndroidProducts.mk
         echo "COMMON_LUNCH_CHOICES := \\" >> AndroidProducts.mk
         echo "    twrp_${{ inputs.DEVICE_NAME }}-eng \\" >> AndroidProducts.mk
         echo "    twrp_${{ inputs.DEVICE_NAME }}-userdebug" >> AndroidProducts.mk
 
-        # 6. Kosongkan vendorsetup.sh agar tidak terjadi pesan usang add_lunch_combo
+        # 7. Kosongkan vendorsetup.sh agar tidak terjadi pesan usang add_lunch_combo
         if [ -f "vendorsetup.sh" ]; then
           > vendorsetup.sh
         fi

@@ -181,16 +181,20 @@ jobs:
         echo "    twrp_${{ inputs.DEVICE_NAME }}-eng \\" >> AndroidProducts.mk
         echo "    twrp_${{ inputs.DEVICE_NAME }}-userdebug" >> AndroidProducts.mk
 
-        # 7. Kosongkan vendorsetup.sh agar tidak terjadi pesan usang add_lunch_combo
-        if [ -f "vendorsetup.sh" ]; then
-          > vendorsetup.sh
-        fi
+        # 8. Perbaiki CUSTOM_LUN_FILE format string dari lun0/file ke lun%d/file
+        sed -i 's|lun0/file|lun%d/file|g' BoardConfig.mk
 
         echo "Pembaruan tree selesai."
 
     - name: Compile OrangeFox Recovery
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+
+        # Toleransi peringatan compiler format string jika ada
+        if [ -f "bootable/recovery/Android.mk" ]; then
+          sed -i 's|-Wall -Werror|-Wall -Werror -Wno-error=format-extra-args|g' bootable/recovery/Android.mk
+        fi
+
         set +e
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true

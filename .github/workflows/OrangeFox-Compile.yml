@@ -14,19 +14,19 @@ on:
       DEVICE_TREE:
         description: 'OrangeFox / TWRP Device Tree'
         required: true
-        default: 'https://github.com/Dhruvgera/santoni-ofrp.git'
+        default: 'https://github.com/TeamWin/android_device_xiaomi_mi8937.git'
       DEVICE_TREE_BRANCH:
         description: 'Device Tree Branch'
         required: true
-        default: 'android-9.0'
+        default: 'android-12.1'
       DEVICE_PATH:
         description: 'Device Path'
         required: true
-        default: 'device/xiaomi/santoni'
+        default: 'device/xiaomi/mi8937'
       DEVICE_NAME:
         description: 'Device Codename'
         required: true
-        default: 'santoni'
+        default: 'mi8937'
       BUILD_TARGET:
         description: 'Build Target'
         required: true
@@ -84,73 +84,35 @@ jobs:
         cd sync
         ./orangefox_sync.sh --branch ${{ inputs.MANIFEST_BRANCH }} --path ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
 
-    - name: Clone Device Tree
+    - name: Clone Device Tree & Dependencies (RDP & FBE)
       run: |
-        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+        FOX_DIR="${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}"
+        cd "$FOX_DIR"
         rm -rf ./${{ inputs.DEVICE_PATH }}
         git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./${{ inputs.DEVICE_PATH }}
         cd ${{ inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
-    - name: Setup cryptfs_hw Soong Module
+        cd "$FOX_DIR"
+        # Clone common and kernel dependencies jika target mi8937 / mithorium
+        if [ ! -d "device/xiaomi/mithorium-common" ]; then
+          echo "Cloning device/xiaomi/mithorium-common (android-12.1)..."
+          git clone https://github.com/TeamWin/android_device_xiaomi_mithorium-common.git -b android-12.1 device/xiaomi/mithorium-common
+        fi
+        if [ ! -d "device/xiaomi/kernel-mithorium" ]; then
+          echo "Cloning device/xiaomi/kernel-mithorium (master)..."
+          git clone --depth 1 https://github.com/TeamWin/android_device_xiaomi_kernel-mithorium.git -b master device/xiaomi/kernel-mithorium
+        fi
+
+    - name: Adapt Device Tree for OrangeFox 12.1 & RDP
       run: |
-        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
-        rm -rf device/qcom/common vendor/qcom/opensource/commonsys/cryptfs_hw temp_qcom
-        git clone https://github.com/minimal-manifest-twrp/platform_device_qcom_common.git temp_qcom
-        mkdir -p vendor/qcom/opensource/commonsys/cryptfs_hw
-        cp temp_qcom/cryptfs_hw/cryptfs_hw.c vendor/qcom/opensource/commonsys/cryptfs_hw/
-        cp temp_qcom/cryptfs_hw/cryptfs_hw.h vendor/qcom/opensource/commonsys/cryptfs_hw/
-        rm -rf temp_qcom
-
-        # Sesuaikan include path di cryptfs_hw.c untuk Android 12
-        sed -i 's|"keymaster_common.h"|<hardware/keymaster_common.h>|g' vendor/qcom/opensource/commonsys/cryptfs_hw/cryptfs_hw.c
-        sed -i 's|"hardware.h"|<hardware/hardware.h>|g' vendor/qcom/opensource/commonsys/cryptfs_hw/cryptfs_hw.c
-
-        # Buat Android.bp modern agar dikenali oleh Soong (system/vold)
-        cat << 'EOF' > vendor/qcom/opensource/commonsys/cryptfs_hw/Android.bp
-        cc_library_headers {
-            name: "libcryptfs_hw_headers",
-            export_include_dirs: ["."],
-            vendor_available: true,
-            recovery_available: true,
-            host_supported: true,
-        }
-
-        cc_library {
-            name: "libcryptfs_hw",
-            srcs: ["cryptfs_hw.c"],
-            include_dirs: [
-                "hardware/libhardware/include",
-                "hardware/libhardware/include/hardware",
-            ],
-            header_libs: [
-                "libcryptfs_hw_headers",
-                "libhardware_headers",
-            ],
-            shared_libs: [
-                "libcutils",
-                "libutils",
-                "liblog",
-                "libhardware",
-            ],
-            cflags: [
-                "-Wno-error",
-                "-Wno-unused-parameter",
-                "-Wno-sign-compare",
-            ],
-            vendor_available: true,
-            recovery_available: true,
-        }
-        EOF
-
-    - name: Adapt Device Tree for OrangeFox 12.1
-      run: |
-        DEV_DIR="${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/${{ inputs.DEVICE_PATH }}"
+        FOX_DIR="${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}"
+        DEV_DIR="$FOX_DIR/${{ inputs.DEVICE_PATH }}"
         cd "$DEV_DIR"
 
-        echo "Menyesuaikan makefile untuk sistem build AOSP 12.1..."
+        echo "Menyesuaikan makefile untuk OrangeFox dan Retrofit Dynamic Partitions (RDP)..."
 
-        # 1. Konversi omni_<device>.mk ke twrp_<device>.mk
+        # 1. Konversi omni_<device>.mk ke twrp_<device>.mk jika ada legacy tree
         if [ -f "omni_${{ inputs.DEVICE_NAME }}.mk" ]; then
           sed -e 's|vendor/omni/config/common.mk|vendor/twrp/config/common.mk|g' \
               -e 's|.*vendor/omni/config/gsm.mk.*||g' \
@@ -158,43 +120,46 @@ jobs:
               "omni_${{ inputs.DEVICE_NAME }}.mk" > "twrp_${{ inputs.DEVICE_NAME }}.mk"
         fi
 
-        # 2. Hapus referensi file yang sudah usang di Android 12 (seperti languages_full.mk jika ada)
+        # 2. Hapus referensi file usang jika ada
         find . -name "*.mk" -exec sed -i 's|.*languages_full.mk.*||g' {} +
-
-        # 3. Hapus duplikasi penyalinan kernel di PRODUCT_COPY_FILES karena sudah diatur oleh TARGET_PREBUILT_KERNEL
         find . -name "*.mk" -exec sed -i 's|.*recovery/kernel:kernel.*||g' {} +
 
-        # 4. Tangani arsitektur 64-bit CPU dengan 32-bit userspace apps
+        # 3. Tangani arsitektur 64-bit CPU dengan 32-bit userspace apps
         if ! grep -q "TARGET_SUPPORTS_64_BIT_APPS" BoardConfig.mk; then
           echo "" >> BoardConfig.mk
           echo "# Fix AOSP 12 32-bit app check on 64-bit device" >> BoardConfig.mk
           echo "TARGET_SUPPORTS_64_BIT_APPS := false" >> BoardConfig.mk
         fi
 
-        # 5. Pastikan TARGET_CRYPTFS_HW_PATH mengarah ke folder cryptfs_hw yang valid
-        sed -i 's|TARGET_CRYPTFS_HW_PATH :=.*|TARGET_CRYPTFS_HW_PATH := vendor/qcom/opensource/commonsys/cryptfs_hw|g' BoardConfig.mk
+        # 4. Pastikan AndroidProducts.mk dan COMMON_LUNCH_CHOICES terdefinisi
+        if [ ! -f "AndroidProducts.mk" ]; then
+          echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk" > AndroidProducts.mk
+          echo "" >> AndroidProducts.mk
+          echo "COMMON_LUNCH_CHOICES := \\" >> AndroidProducts.mk
+          echo "    twrp_${{ inputs.DEVICE_NAME }}-eng \\" >> AndroidProducts.mk
+          echo "    twrp_${{ inputs.DEVICE_NAME }}-userdebug" >> AndroidProducts.mk
+        fi
 
-        # 6. Perbarui AndroidProducts.mk dan COMMON_LUNCH_CHOICES standar Android 12.1
-        echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk" > AndroidProducts.mk
-        echo "" >> AndroidProducts.mk
-        echo "COMMON_LUNCH_CHOICES := \\" >> AndroidProducts.mk
-        echo "    twrp_${{ inputs.DEVICE_NAME }}-eng \\" >> AndroidProducts.mk
-        echo "    twrp_${{ inputs.DEVICE_NAME }}-userdebug" >> AndroidProducts.mk
+        # 5. Perbaiki format CUSTOM_LUN_FILE format string jika ada
+        sed -i 's|lun0/file|lun%d/file|g' BoardConfig.mk || true
 
-        # 8. Perbaiki CUSTOM_LUN_FILE format string dari lun0/file ke lun%d/file
-        sed -i 's|lun0/file|lun%d/file|g' BoardConfig.mk
-
-        # 9. Aktifkan tombol navigasi fisik/kapasitif (Back, Home, Menu)
+        # 6. Aktifkan tombol navigasi fisik/kapasitif (Back, Home, Menu)
         if ! grep -q "TW_HAS_CAPACITIVE_KEYS" BoardConfig.mk; then
           echo "" >> BoardConfig.mk
           echo "# Enable physical/capacitive hardware navigation keys" >> BoardConfig.mk
           echo "TW_HAS_CAPACITIVE_KEYS := true" >> BoardConfig.mk
         fi
 
-        # 10. Salin foto profil maintainer ke device tree
+        # 7. Salin foto profil maintainer ke device tree
         if [ -f "${GITHUB_WORKSPACE}/assets/maintainer.png" ]; then
           cp "${GITHUB_WORKSPACE}/assets/maintainer.png" "$DEV_DIR/maintainer.png"
           echo "Avatar maintainer berhasil disalin ke device tree."
+        fi
+
+        # 8. Patch merge-fstab.sh untuk mendukung dekripsi modern FBE (Retrofit Dynamic Partitions)
+        if [ -f "recovery/root/system/bin/merge-fstab.sh" ]; then
+          echo "Menerapkan fallback FBE otomatis pada recovery/root/system/bin/merge-fstab.sh..."
+          sed -i '/umount \/data || true/!b;n;c\else\n    sed -i '\''s|,encryptable=footer|,fileencryption=aes-256-xts|g'\'' /system/etc/recovery.fstab\n    sed -i '\''s|encryptable=footer;|fileencryption=aes-256-xts;|g'\'' /system/etc/twrp.flags\nfi' recovery/root/system/bin/merge-fstab.sh
         fi
 
         echo "Pembaruan tree selesai."
@@ -212,7 +177,7 @@ jobs:
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
 
-        # Nama maintainer resmi di layar About OrangeFox
+        # Identitas maintainer resmi di layar About OrangeFox
         export OF_MAINTAINER="mahfudfaried"
 
         # Avatar maintainer resmi
@@ -237,7 +202,7 @@ jobs:
         export OF_USE_NEW_MAGISKBOOT=1
 
         set -e
-        # Melakukan lunch twrp target
+        # Melakukan lunch target twrp
         lunch twrp_${{ inputs.DEVICE_NAME }}-eng
 
         make clean
@@ -262,7 +227,9 @@ jobs:
 
           * **Maintainer:** `mahfudfaried`
           * **Manifest Branch:** `fox_${{ inputs.MANIFEST_BRANCH }}`
-          * **Target Perangkat:** `${{ inputs.DEVICE_NAME }}`
+          * **Target Perangkat:** `${{ inputs.DEVICE_NAME }}` (Xiaomi Redmi 4X / mi8937)
+          * **Partition Scheme:** Retrofit Dynamic Partitions (RDP)
+          * **Encryption:** File-Based Encryption (FBE) & FDE Compatible
           * **Device Tree:** [${{ inputs.DEVICE_TREE }}](${{ inputs.DEVICE_TREE }}) (Branch: `${{ inputs.DEVICE_TREE_BRANCH }}`)
           * **WiFi Enabled:** `${{ inputs.ENABLE_WIFI }}`
           * **App Manager Enabled:** `${{ inputs.ENABLE_APP_MANAGER }}`

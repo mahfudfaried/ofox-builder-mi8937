@@ -111,7 +111,7 @@ jobs:
         COMMON_DIR="$FOX_DIR/device/xiaomi/mithorium-common"
         cd "$DEV_DIR"
 
-        echo "Menyesuaikan makefile untuk OrangeFox, RDP, kompatibilitas santoni, dan FBE modern..."
+        echo "Menyesuaikan makefile untuk OrangeFox, RDP, kompatibilitas santoni, dan FBE v2 modern..."
 
         # 1. Konversi omni_<device>.mk ke twrp_<device>.mk jika ada legacy tree
         if [ -f "omni_${{ inputs.DEVICE_NAME }}.mk" ]; then
@@ -176,7 +176,28 @@ jobs:
           echo "TW_USE_FSCRYPT_POLICY := 2" >> BoardConfig.mk
         fi
 
-        # 10. Pindahkan eksekusi merge-fstab.sh dari 'on init' ke 'on fs' (setelah /dev/block/bootdevice dibuat)
+        # 10. Ubah fstab secara permanen ke FBE v2 + Metadata Decryption (Hapus legacy encryptable=footer)
+        FSTAB_DEV="recovery/root/system/etc/recovery.fstab.device"
+        FLAGS_DEV="recovery/root/system/etc/twrp.flags.device"
+        if [ -f "$FSTAB_DEV" ]; then
+          echo "Mengubah $FSTAB_DEV secara permanen ke FBE v2..."
+          sed -i 's|,encryptable=footer|,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,metadata_encryption=aes-256-xts|g' "$FSTAB_DEV"
+        fi
+        if [ -f "$FLAGS_DEV" ]; then
+          echo "Mengubah $FLAGS_DEV secara permanen ke FBE..."
+          sed -i 's|flags=encryptable=footer;|flags=fileencryption=aes-256-xts;|g' "$FLAGS_DEV"
+        fi
+
+        # 11. Tambahkan pre-configured dynamic partition mappings ke fstab agar langsung ready sejak awal
+        if [ -f "$FSTAB_DEV" ] && ! grep -q "logical" "$FSTAB_DEV"; then
+          echo "Menambahkan entri dynamic partitions default ke fstab..."
+          echo "" >> "$FSTAB_DEV"
+          for p in system system_ext product vendor odm; do
+            echo "${p} /${p} ext4 rw,barrier=1,discard wait,logical" >> "$FSTAB_DEV"
+          done
+        fi
+
+        # 12. Pindahkan eksekusi merge-fstab.sh dari 'on init' ke 'on fs' (setelah /dev/block/bootdevice dibuat)
         if [ -f "recovery/root/init.recovery.device.rc" ]; then
           sed -i '/exec u:r:recovery:s0 -- \/system\/bin\/merge-fstab.sh/d' recovery/root/init.recovery.device.rc
         fi
@@ -190,9 +211,8 @@ jobs:
           fi
         fi
 
-        # 11. Patch merge-fstab.sh untuk mendukung dekripsi modern FBE (Retrofit Dynamic Partitions)
+        # 13. Sempurnakan fallback pada merge-fstab.sh
         if [ -f "recovery/root/system/bin/merge-fstab.sh" ]; then
-          echo "Menerapkan fallback FBE otomatis pada recovery/root/system/bin/merge-fstab.sh..."
           sed -i '/umount \/data || true/!b;n;c\else\n    sed -i '\''s|,encryptable=footer|,fileencryption=aes-256-xts|g'\'' /system/etc/recovery.fstab\n    sed -i '\''s|encryptable=footer;|fileencryption=aes-256-xts;|g'\'' /system/etc/twrp.flags\nfi' recovery/root/system/bin/merge-fstab.sh
         fi
 

@@ -174,14 +174,18 @@ jobs:
           echo "# Modern FBE Decryption Policy" >> BoardConfig.mk
           echo "TW_INCLUDE_FBE_METADATA_DECRYPT := true" >> BoardConfig.mk
           echo "TW_USE_FSCRYPT_POLICY := 2" >> BoardConfig.mk
+          echo "BOARD_USES_METADATA_PARTITION := true" >> BoardConfig.mk
+          echo "TARGET_KEYMASTER_WAIT_FOR_QSEE := true" >> BoardConfig.mk
         fi
 
-        # 10. Ubah fstab secara permanen ke FBE v2 + Metadata Decryption (Hapus legacy encryptable=footer)
+        # 10. Ubah fstab secara permanen ke FBE v2 + Metadata Decryption + keydirectory
         FSTAB_DEV="recovery/root/system/etc/recovery.fstab.device"
         FLAGS_DEV="recovery/root/system/etc/twrp.flags.device"
+        CRYPTO_FLAGS="wait,check,quota,formattable,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,metadata_encryption=aes-256-xts,keydirectory=/metadata/vold/metadata_encryption"
         if [ -f "$FSTAB_DEV" ]; then
           echo "Mengubah $FSTAB_DEV secara permanen ke FBE v2..."
-          sed -i 's|,encryptable=footer|,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,metadata_encryption=aes-256-xts|g' "$FSTAB_DEV"
+          sed -i "s|,encryptable=footer|,$CRYPTO_FLAGS|g" "$FSTAB_DEV"
+          sed -i "s|metadata_encryption=aes-256-xts$|metadata_encryption=aes-256-xts,keydirectory=/metadata/vold/metadata_encryption|g" "$FSTAB_DEV"
         fi
         if [ -f "$FLAGS_DEV" ]; then
           echo "Mengubah $FLAGS_DEV secara permanen ke FBE..."
@@ -197,7 +201,15 @@ jobs:
           done
         fi
 
-        # 12. Pindahkan eksekusi merge-fstab.sh dari 'on init' ke 'on fs' (setelah /dev/block/bootdevice dibuat)
+        # 12. Set default keymaster_ver ke 3.0 dan sediakan HAL manifest di ramdisk
+        # Pastikan recovery mencari Keymaster 3.0 (sesuai HAL vendor Mi8937) bukan 4.x
+        if [ -f "recovery/root/system/etc/vintf/manifest.xml" ]; then
+          if ! grep -q "android.hardware.keymaster" "recovery/root/system/etc/vintf/manifest.xml"; then
+            sed -i '/<\/manifest>/i \    <hal format="hidl">\n        <name>android.hardware.keymaster</name>\n        <transport>hwbinder</transport>\n        <version>3.0</version>\n        <interface>\n            <name>IKeymasterDevice</name>\n            <instance>default</instance>\n        </interface>\n    </hal>' recovery/root/system/etc/vintf/manifest.xml
+          fi
+        fi
+
+        # 13. Pindahkan eksekusi merge-fstab.sh dari 'on init' ke 'on fs' (setelah /dev/block/bootdevice dibuat)
         if [ -f "recovery/root/init.recovery.device.rc" ]; then
           sed -i '/exec u:r:recovery:s0 -- \/system\/bin\/merge-fstab.sh/d' recovery/root/init.recovery.device.rc
         fi
@@ -205,15 +217,18 @@ jobs:
           if ! grep -q "merge-fstab.sh" "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"; then
             sed -i '/symlink \/dev\/block\/platform\/soc/a\    exec u:r:recovery:s0 -- /system/bin/merge-fstab.sh' "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"
           fi
-          # Pastikan gatekeeper service distart bersamaan dengan keymaster & qseecomd
+          # Pastikan keymaster_ver diset ke 3.0 dan gatekeeper diservice
+          if ! grep -q "setprop keymaster_ver 3.0" "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"; then
+            sed -i '/start keymaster-3-0/a\    setprop keymaster_ver 3.0' "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"
+          fi
           if ! grep -q "gatekeeper-1-0" "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"; then
             sed -i '/start keymaster-4-0-qti/a\    start gatekeeper-1-0\n    start gatekeeper-1-0-qti' "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"
           fi
         fi
 
-        # 13. Sempurnakan fallback pada merge-fstab.sh
+        # 14. Sempurnakan fallback pada merge-fstab.sh
         if [ -f "recovery/root/system/bin/merge-fstab.sh" ]; then
-          sed -i '/umount \/data || true/!b;n;c\else\n    sed -i '\''s|,encryptable=footer|,fileencryption=aes-256-xts|g'\'' /system/etc/recovery.fstab\n    sed -i '\''s|encryptable=footer;|fileencryption=aes-256-xts;|g'\'' /system/etc/twrp.flags\nfi' recovery/root/system/bin/merge-fstab.sh
+          sed -i '/umount \/data || true/!b;n;c\else\n    sed -i '\''s|,encryptable=footer|,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,metadata_encryption=aes-256-xts,keydirectory=\/metadata\/vold\/metadata_encryption|g'\'' /system/etc/recovery.fstab\n    sed -i '\''s|encryptable=footer;|fileencryption=aes-256-xts;|g'\'' /system/etc/twrp.flags\nfi' recovery/root/system/bin/merge-fstab.sh
         fi
 
         echo "Pembaruan tree selesai."

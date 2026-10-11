@@ -167,10 +167,19 @@ jobs:
           echo "FOX_TARGET_DEVICES := santoni,mi8937" >> BoardConfig.mk
         fi
 
-        # 8. Salin foto profil maintainer ke device tree
+        # 8. Salin foto profil maintainer ke device tree dan theme GUI OrangeFox
         if [ -f "${GITHUB_WORKSPACE}/assets/maintainer.png" ]; then
           cp "${GITHUB_WORKSPACE}/assets/maintainer.png" "$DEV_DIR/maintainer.png"
-          echo "Avatar maintainer berhasil disalin ke device tree."
+          # Buat atau update vendorsetup.sh agar build system otomatis mengenali maintainer dan avatarnya
+          echo "export OF_MAINTAINER=\"mahfudfaried\"" >> "$DEV_DIR/vendorsetup.sh"
+          echo "export OF_MAINTAINER_AVATAR=\"$DEV_DIR/maintainer.png\"" >> "$DEV_DIR/vendorsetup.sh"
+
+          # Inject langsung ke tema bawaan bootable/recovery/gui/theme jika sudah disync
+          find "$FOX_DIR/bootable/recovery/gui" -type d -name "About" | while read -r about_dir; do
+            echo "Menyalin avatar maintainer ke: $about_dir/maintainer.png"
+            cp "${GITHUB_WORKSPACE}/assets/maintainer.png" "$about_dir/maintainer.png"
+          done
+          echo "Avatar maintainer berhasil disalin ke device tree dan tema recovery."
         fi
 
         # 9. Konfigurasi FBE v2 policy & Metadata Decryption untuk Android 11-17 (LineageOS modern)

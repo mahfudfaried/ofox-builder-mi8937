@@ -191,6 +191,12 @@ jobs:
           echo "TW_HAS_CAPACITIVE_KEYS := true" >> BoardConfig.mk
         fi
 
+        # 10. Salin foto profil maintainer ke device tree
+        if [ -f "${GITHUB_WORKSPACE}/assets/maintainer.png" ]; then
+          cp "${GITHUB_WORKSPACE}/assets/maintainer.png" "$DEV_DIR/maintainer.png"
+          echo "Avatar maintainer berhasil disalin ke device tree."
+        fi
+
         echo "Pembaruan tree selesai."
 
     - name: Compile OrangeFox Recovery
@@ -208,6 +214,11 @@ jobs:
 
         # Nama maintainer resmi di layar About OrangeFox
         export OF_MAINTAINER="mahfudfaried"
+
+        # Avatar maintainer resmi
+        if [ -f "${GITHUB_WORKSPACE}/assets/maintainer.png" ]; then
+          export OF_MAINTAINER_AVATAR="${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/${{ inputs.DEVICE_PATH }}/maintainer.png"
+        fi
 
         # Dukungan tombol fisik dan opsi menyembunyikan on-screen navbar
         export OF_ALLOW_DISABLE_NAVBAR=1

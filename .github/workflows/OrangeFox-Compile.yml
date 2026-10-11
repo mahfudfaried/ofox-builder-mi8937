@@ -202,13 +202,9 @@ jobs:
         # Nama maintainer resmi di layar About OrangeFox
         export OF_MAINTAINER="mahfudfaried"
 
-        # Konfigurasi fitur WiFi & App Manager
-        if [ "${{ inputs.ENABLE_WIFI }}" = "true" ]; then
-          export TW_INCLUDE_WIFI=true
-          echo "Dukungan WiFi: DIAKTIFKAN"
-        fi
-
+        # Konfigurasi fitur App Manager
         if [ "${{ inputs.ENABLE_APP_MANAGER }}" = "true" ]; then
+          export FOX_ENABLE_APP_MANAGER=1
           export OF_DISABLE_EXTRA_EXTRACTING=0
           echo "Fitur App Manager & Addons: DIAKTIFKAN"
         fi

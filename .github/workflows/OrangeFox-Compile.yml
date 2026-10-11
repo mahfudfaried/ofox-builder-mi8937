@@ -92,6 +92,44 @@ jobs:
         cd ${{ inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
+    - name: Adapt Device Tree for OrangeFox 12.1
+      run: |
+        DEV_DIR="${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/${{ inputs.DEVICE_PATH }}"
+        cd "$DEV_DIR"
+
+        echo "Menyesuaikan makefile untuk sistem build AOSP 12.1..."
+
+        # 1. Konversi omni_<device>.mk ke twrp_<device>.mk
+        if [ -f "omni_${{ inputs.DEVICE_NAME }}.mk" ]; then
+          sed -e 's|vendor/omni/config/common.mk|vendor/twrp/config/common.mk|g' \
+              -e 's|.*vendor/omni/config/gsm.mk.*||g' \
+              -e "s|PRODUCT_NAME := omni_${{ inputs.DEVICE_NAME }}|PRODUCT_NAME := twrp_${{ inputs.DEVICE_NAME }}|g" \
+              "omni_${{ inputs.DEVICE_NAME }}.mk" > "twrp_${{ inputs.DEVICE_NAME }}.mk"
+        fi
+
+        # 2. Hapus referensi file yang sudah usang di Android 12 (seperti languages_full.mk jika ada)
+        find . -name "*.mk" -exec sed -i 's|.*languages_full.mk.*||g' {} +
+
+        # 3. Perbarui AndroidProducts.mk agar mereferensikan twrp_<device>.mk
+        if [ -f "AndroidProducts.mk" ]; then
+          sed -i "s|omni_${{ inputs.DEVICE_NAME }}\.mk|twrp_${{ inputs.DEVICE_NAME }}\.mk|g" AndroidProducts.mk
+          if ! grep -q "twrp_${{ inputs.DEVICE_NAME }}.mk" AndroidProducts.mk; then
+            echo "PRODUCT_MAKEFILES += \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk" >> AndroidProducts.mk
+          fi
+        else
+          echo "PRODUCT_MAKEFILES := \$(LOCAL_DIR)/twrp_${{ inputs.DEVICE_NAME }}.mk" > AndroidProducts.mk
+        fi
+
+        # 4. Tambahkan lunch combo ke vendorsetup.sh
+        if [ -f "vendorsetup.sh" ]; then
+          echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-eng" >> vendorsetup.sh
+          echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-userdebug" >> vendorsetup.sh
+        else
+          echo "add_lunch_combo twrp_${{ inputs.DEVICE_NAME }}-eng" > vendorsetup.sh
+        fi
+
+        echo "Pembaruan tree selesai."
+
     - name: Compile OrangeFox Recovery
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
@@ -117,17 +155,8 @@ jobs:
         export OF_USE_NEW_MAGISKBOOT=1
 
         set -e
-        # Mencoba lunch target recovery
-        if lunch omni_${{ inputs.DEVICE_NAME }}-eng 2>/dev/null; then
-          echo "Lunch omni_${{ inputs.DEVICE_NAME }}-eng berhasil"
-        elif lunch twrp_${{ inputs.DEVICE_NAME }}-eng 2>/dev/null; then
-          echo "Lunch twrp_${{ inputs.DEVICE_NAME }}-eng berhasil"
-        elif lunch fox_${{ inputs.DEVICE_NAME }}-eng 2>/dev/null; then
-          echo "Lunch fox_${{ inputs.DEVICE_NAME }}-eng berhasil"
-        else
-          echo "Fallback: lunch omni_${{ inputs.DEVICE_NAME }}-eng"
-          lunch omni_${{ inputs.DEVICE_NAME }}-eng
-        fi
+        # Melakukan lunch twrp target
+        lunch twrp_${{ inputs.DEVICE_NAME }}-eng
 
         make clean
         mka adbd ${{ inputs.BUILD_TARGET }}image

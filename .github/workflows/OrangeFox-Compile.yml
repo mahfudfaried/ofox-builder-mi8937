@@ -36,11 +36,6 @@ on:
         - recovery
         - boot
         - vendorboot
-      ENABLE_WIFI:
-        description: 'Aktifkan Dukungan WiFi (TW_INCLUDE_WIFI)'
-        required: true
-        default: true
-        type: boolean
       ENABLE_APP_MANAGER:
         description: 'Aktifkan Fitur App Manager (OF_DISABLE_EXTRA_EXTRACTING=0)'
         required: true
@@ -248,6 +243,12 @@ jobs:
           sed -i '/umount \/data || true/!b;n;c\else\n    sed -i '\''s|,encryptable=footer|,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,metadata_encryption=aes-256-xts,keydirectory=\/metadata\/vold\/metadata_encryption|g'\'' /system/etc/recovery.fstab\n    sed -i '\''s|encryptable=footer;|fileencryption=aes-256-xts;|g'\'' /system/etc/twrp.flags\nfi' recovery/root/system/bin/merge-fstab.sh
         fi
 
+        # 15. Atur ulang tata letak menu Addition dan sub-halaman Other
+        if [ -f "${GITHUB_WORKSPACE}/scripts/rearrange_menu.py" ]; then
+          echo "Menyesuaikan tata letak menu Addition dan sub-halaman Other..."
+          python3 "${GITHUB_WORKSPACE}/scripts/rearrange_menu.py" "$FOX_DIR"
+        fi
+
         echo "Pembaruan tree selesai."
 
     - name: Compile OrangeFox Recovery
@@ -322,6 +323,5 @@ jobs:
           * **Partition Scheme:** Retrofit Dynamic Partitions (RDP)
           * **Encryption:** File-Based Encryption (FBE v2) & FDE Compatible
           * **Device Tree:** [${{ inputs.DEVICE_TREE }}](${{ inputs.DEVICE_TREE }}) (Branch: `${{ inputs.DEVICE_TREE_BRANCH }}`)
-          * **WiFi Enabled:** `${{ inputs.ENABLE_WIFI }}`
           * **App Manager Enabled:** `${{ inputs.ENABLE_APP_MANAGER }}`
           * **Waktu Build:** `${{ env.BUILD_DATE }}`

@@ -254,6 +254,7 @@ jobs:
         files: |
           OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.img
           OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/OrangeFox*.zip
+          OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}/out/target/product/${{ inputs.DEVICE_NAME }}/recovery.img
         name: OrangeFox Recovery untuk ${{ inputs.DEVICE_NAME }} (${{ inputs.MANIFEST_BRANCH }})
         tag_name: ${{ env.BUILD_TAG }}
         body: |

@@ -104,36 +104,36 @@ jobs:
 
         # Buat Android.bp modern agar dikenali oleh Soong (system/vold)
         cat << 'EOF' > vendor/qcom/opensource/commonsys/cryptfs_hw/Android.bp
-cc_library_headers {
-    name: "libcryptfs_hw_headers",
-    export_include_dirs: ["."],
-    vendor_available: true,
-    recovery_available: true,
-    host_supported: true,
-}
+        cc_library_headers {
+            name: "libcryptfs_hw_headers",
+            export_include_dirs: ["."],
+            vendor_available: true,
+            recovery_available: true,
+            host_supported: true,
+        }
 
-cc_library {
-    name: "libcryptfs_hw",
-    srcs: ["cryptfs_hw.c"],
-    header_libs: [
-        "libcryptfs_hw_headers",
-        "libhardware_headers",
-    ],
-    shared_libs: [
-        "libcutils",
-        "libutils",
-        "liblog",
-        "libhardware",
-    ],
-    cflags: [
-        "-Wno-error",
-        "-Wno-unused-parameter",
-        "-Wno-sign-compare",
-    ],
-    vendor_available: true,
-    recovery_available: true,
-}
-EOF
+        cc_library {
+            name: "libcryptfs_hw",
+            srcs: ["cryptfs_hw.c"],
+            header_libs: [
+                "libcryptfs_hw_headers",
+                "libhardware_headers",
+            ],
+            shared_libs: [
+                "libcutils",
+                "libutils",
+                "liblog",
+                "libhardware",
+            ],
+            cflags: [
+                "-Wno-error",
+                "-Wno-unused-parameter",
+                "-Wno-sign-compare",
+            ],
+            vendor_available: true,
+            recovery_available: true,
+        }
+        EOF
 
     - name: Adapt Device Tree for OrangeFox 12.1
       run: |

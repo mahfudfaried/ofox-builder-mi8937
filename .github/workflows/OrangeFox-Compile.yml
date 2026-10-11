@@ -104,6 +104,14 @@ jobs:
           git clone --depth 1 https://github.com/TeamWin/android_device_xiaomi_kernel-mithorium.git -b master device/xiaomi/kernel-mithorium
         fi
 
+        # Ganti kernel prebuilt 4.9 dengan kernel 4.19 (EROFS + modern crypto support) jika tersedia di repository
+        if [ -f "${GITHUB_WORKSPACE}/prebuilts/kernel" ]; then
+          echo "Mengganti kernel recovery bawaan dengan Kernel 4.19 CIP (EROFS + dm-default-key FBE v2)..."
+          mkdir -p device/xiaomi/kernel-mithorium/mi8937
+          cp "${GITHUB_WORKSPACE}/prebuilts/kernel" device/xiaomi/kernel-mithorium/mi8937/Image.gz-dtb
+          echo "Kernel 4.19 berhasil di-inject ke device/xiaomi/kernel-mithorium/mi8937/Image.gz-dtb"
+        fi
+
     - name: Adapt Device Tree for OrangeFox 12.1 & RDP Decryption Fix
       run: |
         FOX_DIR="${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}"

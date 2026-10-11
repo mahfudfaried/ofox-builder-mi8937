@@ -104,13 +104,14 @@ jobs:
           git clone --depth 1 https://github.com/TeamWin/android_device_xiaomi_kernel-mithorium.git -b master device/xiaomi/kernel-mithorium
         fi
 
-    - name: Adapt Device Tree for OrangeFox 12.1 & RDP
+    - name: Adapt Device Tree for OrangeFox 12.1 & RDP Decryption Fix
       run: |
         FOX_DIR="${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}"
         DEV_DIR="$FOX_DIR/${{ inputs.DEVICE_PATH }}"
+        COMMON_DIR="$FOX_DIR/device/xiaomi/mithorium-common"
         cd "$DEV_DIR"
 
-        echo "Menyesuaikan makefile untuk OrangeFox dan Retrofit Dynamic Partitions (RDP)..."
+        echo "Menyesuaikan makefile untuk OrangeFox, RDP, dan perbaikan dekripsi modern FBE..."
 
         # 1. Konversi omni_<device>.mk ke twrp_<device>.mk jika ada legacy tree
         if [ -f "omni_${{ inputs.DEVICE_NAME }}.mk" ]; then
@@ -156,7 +157,32 @@ jobs:
           echo "Avatar maintainer berhasil disalin ke device tree."
         fi
 
-        # 8. Patch merge-fstab.sh untuk mendukung dekripsi modern FBE (Retrofit Dynamic Partitions)
+        # 8. Konfigurasi FBE v2 policy & Metadata Decryption untuk Android 11-17 (LineageOS modern)
+        if [ -d "$COMMON_DIR" ]; then
+          sed -i 's|TW_USE_FSCRYPT_POLICY := 1|TW_USE_FSCRYPT_POLICY := 2|g' "$COMMON_DIR/BoardConfigCommon.mk" || true
+        fi
+        if ! grep -q "TW_INCLUDE_FBE_METADATA_DECRYPT" BoardConfig.mk; then
+          echo "" >> BoardConfig.mk
+          echo "# Modern FBE Decryption Policy" >> BoardConfig.mk
+          echo "TW_INCLUDE_FBE_METADATA_DECRYPT := true" >> BoardConfig.mk
+          echo "TW_USE_FSCRYPT_POLICY := 2" >> BoardConfig.mk
+        fi
+
+        # 9. Pindahkan eksekusi merge-fstab.sh dari 'on init' ke 'on fs' (setelah /dev/block/bootdevice dibuat)
+        if [ -f "recovery/root/init.recovery.device.rc" ]; then
+          sed -i '/exec u:r:recovery:s0 -- \/system\/bin\/merge-fstab.sh/d' recovery/root/init.recovery.device.rc
+        fi
+        if [ -f "$COMMON_DIR/recovery/root/init.recovery.qcom.rc" ]; then
+          if ! grep -q "merge-fstab.sh" "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"; then
+            sed -i '/symlink \/dev\/block\/platform\/soc/a\    exec u:r:recovery:s0 -- /system/bin/merge-fstab.sh' "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"
+          fi
+          # Pastikan gatekeeper service distart bersamaan dengan keymaster & qseecomd
+          if ! grep -q "gatekeeper-1-0" "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"; then
+            sed -i '/start keymaster-4-0-qti/a\    start gatekeeper-1-0\n    start gatekeeper-1-0-qti' "$COMMON_DIR/recovery/root/init.recovery.qcom.rc"
+          fi
+        fi
+
+        # 10. Patch merge-fstab.sh untuk mendukung dekripsi modern FBE (Retrofit Dynamic Partitions)
         if [ -f "recovery/root/system/bin/merge-fstab.sh" ]; then
           echo "Menerapkan fallback FBE otomatis pada recovery/root/system/bin/merge-fstab.sh..."
           sed -i '/umount \/data || true/!b;n;c\else\n    sed -i '\''s|,encryptable=footer|,fileencryption=aes-256-xts|g'\'' /system/etc/recovery.fstab\n    sed -i '\''s|encryptable=footer;|fileencryption=aes-256-xts;|g'\'' /system/etc/twrp.flags\nfi' recovery/root/system/bin/merge-fstab.sh
@@ -229,7 +255,7 @@ jobs:
           * **Manifest Branch:** `fox_${{ inputs.MANIFEST_BRANCH }}`
           * **Target Perangkat:** `${{ inputs.DEVICE_NAME }}` (Xiaomi Redmi 4X / mi8937)
           * **Partition Scheme:** Retrofit Dynamic Partitions (RDP)
-          * **Encryption:** File-Based Encryption (FBE) & FDE Compatible
+          * **Encryption:** File-Based Encryption (FBE v2) & FDE Compatible
           * **Device Tree:** [${{ inputs.DEVICE_TREE }}](${{ inputs.DEVICE_TREE }}) (Branch: `${{ inputs.DEVICE_TREE_BRANCH }}`)
           * **WiFi Enabled:** `${{ inputs.ENABLE_WIFI }}`
           * **App Manager Enabled:** `${{ inputs.ENABLE_APP_MANAGER }}`

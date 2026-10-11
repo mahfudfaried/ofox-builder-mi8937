@@ -184,6 +184,13 @@ jobs:
         # 8. Perbaiki CUSTOM_LUN_FILE format string dari lun0/file ke lun%d/file
         sed -i 's|lun0/file|lun%d/file|g' BoardConfig.mk
 
+        # 9. Aktifkan tombol navigasi fisik/kapasitif (Back, Home, Menu)
+        if ! grep -q "TW_HAS_CAPACITIVE_KEYS" BoardConfig.mk; then
+          echo "" >> BoardConfig.mk
+          echo "# Enable physical/capacitive hardware navigation keys" >> BoardConfig.mk
+          echo "TW_HAS_CAPACITIVE_KEYS := true" >> BoardConfig.mk
+        fi
+
         echo "Pembaruan tree selesai."
 
     - name: Compile OrangeFox Recovery
@@ -201,6 +208,9 @@ jobs:
 
         # Nama maintainer resmi di layar About OrangeFox
         export OF_MAINTAINER="mahfudfaried"
+
+        # Dukungan tombol fisik dan opsi menyembunyikan on-screen navbar
+        export OF_ALLOW_DISABLE_NAVBAR=1
 
         # Konfigurasi fitur App Manager
         if [ "${{ inputs.ENABLE_APP_MANAGER }}" = "true" ]; then

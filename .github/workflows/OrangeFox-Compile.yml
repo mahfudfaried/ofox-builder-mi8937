@@ -92,16 +92,48 @@ jobs:
         cd ${{ inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
-    - name: Setup cryptfs_hw Only
+    - name: Setup cryptfs_hw Soong Module
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
-        # Bersihkan folder qcom common agar tidak ada tools usang seperti dtbtool yang terbaca
         rm -rf device/qcom/common vendor/qcom/opensource/commonsys/cryptfs_hw temp_qcom
         git clone https://github.com/minimal-manifest-twrp/platform_device_qcom_common.git temp_qcom
-        mkdir -p vendor/qcom/opensource/commonsys
-        # Ambil HANYA folder cryptfs_hw saja
-        cp -r temp_qcom/cryptfs_hw vendor/qcom/opensource/commonsys/cryptfs_hw
+        mkdir -p vendor/qcom/opensource/commonsys/cryptfs_hw
+        cp temp_qcom/cryptfs_hw/cryptfs_hw.c vendor/qcom/opensource/commonsys/cryptfs_hw/
+        cp temp_qcom/cryptfs_hw/cryptfs_hw.h vendor/qcom/opensource/commonsys/cryptfs_hw/
         rm -rf temp_qcom
+
+        # Buat Android.bp modern agar dikenali oleh Soong (system/vold)
+        cat << 'EOF' > vendor/qcom/opensource/commonsys/cryptfs_hw/Android.bp
+cc_library_headers {
+    name: "libcryptfs_hw_headers",
+    export_include_dirs: ["."],
+    vendor_available: true,
+    recovery_available: true,
+    host_supported: true,
+}
+
+cc_library {
+    name: "libcryptfs_hw",
+    srcs: ["cryptfs_hw.c"],
+    header_libs: [
+        "libcryptfs_hw_headers",
+        "libhardware_headers",
+    ],
+    shared_libs: [
+        "libcutils",
+        "libutils",
+        "liblog",
+        "libhardware",
+    ],
+    cflags: [
+        "-Wno-error",
+        "-Wno-unused-parameter",
+        "-Wno-sign-compare",
+    ],
+    vendor_available: true,
+    recovery_available: true,
+}
+EOF
 
     - name: Adapt Device Tree for OrangeFox 12.1
       run: |
@@ -155,6 +187,9 @@ jobs:
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
 
+        # Nama maintainer resmi di layar About OrangeFox
+        export OF_MAINTAINER="mahfudfaried"
+
         # Konfigurasi fitur WiFi & App Manager
         if [ "${{ inputs.ENABLE_WIFI }}" = "true" ]; then
           export TW_INCLUDE_WIFI=true
@@ -195,6 +230,7 @@ jobs:
         body: |
           ## 🦊 OrangeFox Recovery Build (${{ inputs.DEVICE_NAME }})
 
+          * **Maintainer:** `mahfudfaried`
           * **Manifest Branch:** `fox_${{ inputs.MANIFEST_BRANCH }}`
           * **Target Perangkat:** `${{ inputs.DEVICE_NAME }}`
           * **Device Tree:** [${{ inputs.DEVICE_TREE }}](${{ inputs.DEVICE_TREE }}) (Branch: `${{ inputs.DEVICE_TREE_BRANCH }}`)
